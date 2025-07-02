@@ -23,8 +23,12 @@ const {
   sin,
   cos,
   pow,
+  atan,
   fract,
   split,
+  smoothstep,
+  clamp,
+  abs,
   dynoConst,
   dynoFloat,
   dynoVec3,
@@ -69,6 +73,18 @@ const functions = {
   },
   min: (a: DynoValue, b: DynoValue) => {
     return min(a, b);
+  },
+  abs: (a: DynoValue) => {
+    return abs(a);
+  },
+  clamp: (a: DynoValue, b: DynoValue, c: DynoValue) => {
+    return clamp(a, b, c);
+  },
+  smoothstep: (a: DynoValue, b: DynoValue, t: DynoValue) => {
+    return smoothstep(a, b, t);
+  },
+  atan: (a: DynoValue, b: DynoValue) => {
+    return atan(a, b);
   },
   sin: (arg: DynoValue) => {
     return sin(arg);
@@ -616,6 +632,15 @@ export function runTests() {
 
   test("Max function", () => {
     const result = d`max(${testFloat}, 2)`;
+  });
+
+  test("Atan2 function", () => {
+    const result = d`atan2(${testVec3}.x, ${testVec3}.y)`;
+  });
+
+  test("Complex atan2 function", () => {
+    const result = d`atan2(${testVec3}.x, ${testVec3}.y)`;
+    const r2 = d`cos(${result} * sin(${result}))`;
   });
 
   test("Sqrt function", () => {

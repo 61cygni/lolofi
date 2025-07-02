@@ -1,4 +1,4 @@
-# Lo Lo Fi Worlds 
+# Lo Lo Fi Wormhole 
 
 Music and visuals in VR
 

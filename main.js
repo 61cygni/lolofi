@@ -8,71 +8,60 @@ import { dyno } from "@sparkjsdev/spark";
 const { mul, combine, dynoVec3, dynoConst, dynoFloat, hashVec4 } = dyno;
 
 // These are helper files to remove a bunch of the dyno / shader boilerplate
-import { d } from "./dynoexp.ts";
+import { d, runTests } from "./dynoexp.ts";
 import * as ShaderGen from "./shadergen.js";
 
 import {
   SparkRenderer,
   FpsMovement,
   PointerControls,
-  SplatMesh,
   VRButton,
-  constructGrid,
 } from "@sparkjsdev/spark";
 
 // Set of global variables that are available to the shader during the render loop
-const globalSpeed = dynoFloat(1.5);
 const globalScale = dynoFloat(2);
-const globalFrequency = dynoFloat(0.2);
-const globalAmplitude = dynoFloat(1);
-const globalPhase = dynoFloat(0.5);
-const globalOctaves = dynoFloat(5);
-const globalLacunarity = dynoFloat(2.0);
-const globalPersistence = dynoFloat(0.5);
-
-const globalOpacity = dynoFloat(0.5);
-const globalRed = dynoFloat(0.16);
-const globalGreen = dynoFloat(0.16);
-const globalBlue = dynoFloat(0.32);
-const globalRed2 = dynoFloat(0.36);
-const globalGreen2 = dynoFloat(0.36);
-const globalBlue2 = dynoFloat(0.64);
 
 function renderfunc(index, dynoTime, dynoGlobals) {
-  let position = dynoConst("vec3", [0, 0, 0]);
+  const random = hashVec4(index);
 
-  const dynoColor = combine({
+  const tunnelLength = 40.0;
+  const tunnelSpeed = 5.0;
+
+  let zp = d`((${dynoTime} * ${tunnelSpeed} * ${random}.z) % ${tunnelLength}) - ${tunnelLength / 2}`;
+  
+  const theta = d`2 * PI * ${random}.x`;
+
+  // wiggle : curves in the tunnel that attenuates near ther user
+  let wiggleAmount = d`0.3 * smoothstep(-5.0, 0.0, ${zp})`; // 0 near user, 0.3 at tail
+  let wiggle = d`${wiggleAmount} * sin(2.0 * PI * ${zp} * 0.2 + ${dynoTime})`;
+  // twist : radial twisting 
+  let twist = d`${theta} + 1.5 * sin(${zp} * 0.5 + ${dynoTime})`;
+
+  let radius = d`1.0 + 0.5 * sin(${zp} * 0.7 + ${dynoTime}) * smoothstep(-5.0, 0.0, ${zp})`;
+
+  let xp = d`${radius} * cos(${twist}) + ${wiggle}`;
+  let yp = d`${radius} * sin(${twist}) + ${wiggle}`;
+
+  let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
+
+  // Animate hue with time for extra trippiness
+  let t = d`clamp((${zp} + 5.0) / 10.0, 0.0, 1.0)`;
+  let hue = d`(${t} + 0.2 * ${dynoTime}) % 1.0`;
+
+  // Simple HSV to RGB approximation
+  let r = d`abs(${hue} * 6.0 - 3.0) - 1.0`;
+  let g = d`2.0 - abs(${hue} * 6.0 - 2.0)`;
+  let b = d`2.0 - abs(${hue} * 6.0 - 4.0)`;
+  let dynoColor = combine({
     vectorType: "vec3",
-    x: globalRed,
-    y: globalGreen,
-    z: globalBlue,
+    x: d`clamp(${r}, 0.0, 1.0)`,
+    y: d`clamp(${g}, 0.0, 1.0)`,
+    z: d`clamp(${b}, 0.0, 1.0)`,
   });
 
-  const anisoScale = dynoConst("vec3", [1, 1.5, 1]);
-  const scales = d`${anisoScale} * ${dynoGlobals.scale}`;
-  const dynoOpacity = globalOpacity;
-
-  return {
-    position: position,
-    rgb: dynoColor,
-    opacity: dynoOpacity,
-    scales: scales
-  };
-}
-
-function renderfunc2(index, dynoTime, dynoGlobals) {
-  let position = dynoConst("vec3", [0, 0, 0]);
-
-  const dynoColor = combine({
-    vectorType: "vec3",
-    x: globalRed,
-    y: globalGreen,
-    z: globalBlue,
-  });
-
-  const anisoScale = dynoConst("vec3", [1, 1.5, 1]);
-  const scales = d`${anisoScale} * ${dynoGlobals.scale}`;
-  const dynoOpacity = globalOpacity;
+  const anisoScale = dynoConst("vec3", [.01, .01, .01]);
+  const scales = d`${anisoScale} * pow(${globalScale}, 2)`;
+  const dynoOpacity = d`1.0`;
 
   return {
     position: position,
@@ -83,52 +72,25 @@ function renderfunc2(index, dynoTime, dynoGlobals) {
 }
 
 const audio = document.getElementById('audio');
-
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 128; // You can try 256, 512, etc.
+
+analyser.fftSize = 128; 
 
 const source = audioCtx.createMediaElementSource(audio);
 source.connect(analyser);
 analyser.connect(audioCtx.destination);
 
 const bufferLength = analyser.frequencyBinCount;
-console.log("bufferLength: ", bufferLength);
 const dataArray = new Uint8Array(bufferLength);
 
 function updateFrequency() {
 
   analyser.getByteFrequencyData(dataArray);
 
-  // const scale = dataArray[0] * 0.002;
-  // globalScale.value = scale;
-
-  const frequency = dataArray[1] * 0.001;
-  globalFrequency.value = frequency;
-
-  const amplitude = dataArray[2] * 0.007;
-  globalAmplitude.value = amplitude;
-
-  const green = dataArray[3] * 0.003;
-  globalGreen.value = green;
-
-  const blue = dataArray[4] * 0.004;
-  globalBlue.value = blue;
-
-  const red = dataArray[5] * 0.004;
-  globalRed.value = red;
-
-  const green2 = dataArray[6] * 0.0005;
-  globalGreen2.value = green2;
-
-  const blue2 = dataArray[7] * 0.001;
-  globalBlue2.value = blue2;
-
-  const red2 = dataArray[7] * 0.001;
-  globalRed2.value = red2;
-
-  const persistence = dataArray[8] * 0.003;
-  globalPersistence.value = persistence;
+  // frequencypicked by trial and error
+  let scale = dataArray[7];
+  globalScale.value = (scale ) * 0.008;
 
   // If you want to iterate over all frequencies, you can do this:
   // for (let i = 0; i < bufferLength; i++) {
@@ -137,6 +99,8 @@ function updateFrequency() {
 }
 
 async function main() {
+  //runTests();
+
   const canvas = document.getElementById("canvas");
 
   const scene = new THREE.Scene();
@@ -162,7 +126,7 @@ async function main() {
   scene.add(spark);
 
 
-  const fpsMovement = new FpsMovement({ moveSpeed: 0.5 });
+  const fpsMovement = new FpsMovement({ moveSpeed: 0.5, xr : renderer.xr });
   const pointerControls = new PointerControls({ canvas });
 
   function handleResize() {
@@ -183,9 +147,9 @@ async function main() {
 
   const shadergen = ShaderGen.shaderBox({
     infunc: renderfunc,
-    numSplats: 1,
+    numSplats: 50000,
     globals: {
-      anisoScale: dynoVec3(new THREE.Vector3(0.1, 0.1, 0.1)),
+      anisoScale: dynoVec3(new THREE.Vector3(0.01, 0.01, 0.01)),
       updateFrame(time) {
         this.scale = mul(this.anisoScale, globalScale);
       },
