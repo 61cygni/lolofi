@@ -11,7 +11,7 @@ const { mul, combine, dynoVec3, dynoConst, dynoFloat, hashVec4 } = dyno;
 // These are helper files to remove a bunch of the dyno / shader boilerplate
 import { d, runTests } from "./dynoexp.ts";
 import * as ShaderGen from "./shadergen.js";
-import { starriver, basic } from "./effects.js";
+import { starriver, basic, wormhole, globalScale, galaxy } from "./effects.js";
 
 import {
   SparkRenderer,
@@ -21,7 +21,7 @@ import {
 } from "@sparkjsdev/spark";
 
 // Set of global variables that are available to the shader during the render loop
-const globalScale = dynoFloat(2);
+// const globalScale = dynoFloat(2);
 
 
 function b(index, dynoTime, dynoGlobals) {
@@ -95,57 +95,6 @@ function renderfunc(index, dynoTime, dynoGlobals) {
   };
 }
 
-// floating starfield
-function renderfunc3(index, dynoTime, dynoGlobals) {
-  const random = hashVec4(index);
-
-  // Parameters for the stream
-  const streamLength = 30.0; // how long the stream is
-  const streamRadius = 4.0;  // how wide the stream is
-
-  // Position along the stream (z axis)
-  let zp = d`(${random}.z * ${streamLength}) - (${streamLength} / 2.0)`;
-  //let movingZ = d`(${zp} + ${dynoTime} * 0.1) %  ${streamLength}`;
-  let movingZ = d`(${zp} + ${dynoTime} * 0.1 + (${streamLength} / 2.0)) %  ${streamLength} - (${streamLength} / 2.0)`;
-  zp = movingZ;
-
-  // Angle around the stream axis
-  let theta = d`2.0 * PI * ${random}.x`;
-
-  // Radial distance from the center (for some spread)
-  let r = d`2.0 * sqrt(${random}.y) * ${streamRadius}`;
-
-  let undulateX = d`
-    sin(${zp} * 0.5 + ${dynoTime} * 0.2) * 0.4 +
-    sin(${zp} * 1.3 + ${dynoTime} * 0.13) * 0.2
-  `;
-  let undulateY = d`
-    cos(${zp} * 0.7 + ${dynoTime} * 0.18) * 0.3
-  `;
-
-  // Convert to Cartesian coordinates
-  let xp = d`${undulateX} + ${r} * cos(${theta})`;
-  let yp = d`${undulateY} + ${r} * sin(${theta})`;
-
-  let rgb = dynoVec3(new THREE.Vector3(1, 1, 1));
-  let scale = dynoVec3(new THREE.Vector3(.01, .01, .01));
-  
-  // make opacity fluctute over time
-  // let flicker = d`fract(sin(${dynoTime} * .000001 + ${random}.x * 100.0) * 43758.5453)`;
-  let flicker = d`fract(sin(${random}.x * .000001 + ${random}.y * 100.0) * 43758.5453)`;
-  let opacity = flicker; // for smooth random
-
-  // have the starfield slow move to towards the camera
-  let speed = 0.1;
-  let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
-
-  return {
-    position: position,
-    rgb: rgb,
-    opacity: opacity,
-    scales: scale
-  }
-}
 
 const audio = document.getElementById('audio');
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -195,11 +144,18 @@ async function main() {
     0.1,
     1000,
   );
-  camera.position.set(0, 0, 5);
+  //camera.position.set(0, 0, 5);
+  // camera.position.set(-1.32, .09, 4.86);
+  // camera.rotation.set(-.23, -.43, -.29);
+  camera.position.set(0, 0, 0);
+  camera.rotation.set(0, 0, 0);
 
   localFrame.add(spark);
   localFrame.add(camera);
   scene.add(spark);
+
+  localFrame.position.set(-3.45, 0.90, 8.74);
+  localFrame.rotation.set(-.12, -.01, -.19);
 
 
   const fpsMovement = new FpsMovement({ moveSpeed: 0.5, xr : renderer.xr });
@@ -222,10 +178,11 @@ async function main() {
   }
 
   const shadergen = ShaderGen.shaderBox({
-    // infunc: renderfunc3,
-    infunc: starriver,
+    // infunc: starriver,
+    // infunc: wormhole,
+    infunc: galaxy,
     //infunc: basic,
-    numSplats: 30000,
+    numSplats: 500000,
     globals: {
       anisoScale: dynoVec3(new THREE.Vector3(0.01, 0.01, 0.01)),
       updateFrame(time) {
@@ -245,8 +202,23 @@ loader.load('./skybox.png', function(texture) {
   let lastTime;
 
   // let lastCameraPos = camera.position.clone();
-  localFrame.position.copy(camera.position);
+  //localFrame.position.set(-0.5, -.25, 3.46);
+  //localFrame.rotation.set(-.27, -.22, -.46);
 
+  // Create overlay for camera info
+  const camInfo = document.createElement('div');
+  camInfo.style.position = 'absolute';
+  camInfo.style.top = '0';
+  camInfo.style.left = '0';
+  camInfo.style.color = 'white';
+  camInfo.style.background = 'rgba(0,0,0,0.5)';
+  camInfo.style.fontFamily = 'monospace';
+  camInfo.style.fontSize = '14px';
+  camInfo.style.padding = '6px 10px';
+  camInfo.style.zIndex = '10';
+  document.body.appendChild(camInfo);
+
+  let init = false;
   renderer.setAnimationLoop((time) => {
     const timeSeconds = time * 0.001;
     const deltaTime = timeSeconds - (lastTime ?? timeSeconds);
@@ -256,6 +228,15 @@ loader.load('./skybox.png', function(texture) {
     fpsMovement.update(deltaTime, localFrame);
 
     updateFrequency();
+
+    // Update camera info overlay
+    const pos = localFrame.position;
+    const rot = localFrame.rotation;
+    camInfo.textContent =
+      `Camera Position:\n` +
+      `x: ${pos.x.toFixed(2)}  y: ${pos.y.toFixed(2)}  z: ${pos.z.toFixed(2)}\n` +
+      `Rotation (rad):\n` +
+      `x: ${rot.x.toFixed(2)}  y: ${rot.y.toFixed(2)}  z: ${rot.z.toFixed(2)}`;
 
     renderer.render(scene, camera);
   });

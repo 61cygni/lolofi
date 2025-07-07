@@ -77,3 +77,122 @@ export function starriver(index, dynoTime, dynoGlobals) {
       scales: scale
     }
   }
+
+
+// --
+// DustDevil 
+// --
+
+
+export function galaxy(index, dynoTime, dynoGlobals) {
+    const random = hashVec4(index);
+
+    const height = .5;
+    const baseRadius = 0.03;
+    const maxExtraRadius = 10.0; // top will be 2.3 units wide
+
+    //let zJitter = d`(${random}.w - 0.5) * ${random}.z * 1.0`; // more jitter at the top
+    let zJitter = d`(${random}.w - 0.5) * 0.3`;
+    let yJitter = d`(${random}.y - 0.5) * 0.3`;
+    let xJitter = d`(${random}.x - 0.5) * 0.3`;
+
+    let r = d`${baseRadius} + pow(${random}.z, 2.0) * ${maxExtraRadius}`;
+
+    //let swirlSpeed = d`.2 * ${random}.w `;
+    let baseSpeed = 0.2; // or whatever you want
+    let swirlSpeed = d`-1. * (${baseSpeed} * pow(1.0 - clamp(${r} / ${maxExtraRadius}, 0.0, 1.0), 2.0))`;
+    //let theta = d`(${random}.z * 8.0 * PI) + (${dynoTime} * ${swirlSpeed}) + (${random}.x * 2.0 * PI)`;
+
+    const numTendrils = 4; // Number of arms/tendrils
+    const thetaJitterOffset = 1.5;
+    let baseTheta = d`floor(${random}.x * ${numTendrils}) * (2.0 * PI / ${numTendrils})`;
+    let thetaJitter = d`(${random}.y - 0.5) * (2.0 * PI / ${numTendrils}) * ${thetaJitterOffset}`; // small random offset
+    let theta = d`(${random}.z * 8.0 * PI) + (${dynoTime} * ${swirlSpeed}) + ${baseTheta} + ${thetaJitter}`;
+  
+    //let r = d`${baseRadius} + ${maxExtraRadius} * ${random}.y + 0.2 * ${random}.z`; // funnel shape
+  
+    let yp = d`${random}.z * ${height} + ${yJitter}`;
+    let xp = d`${r} * cos(${theta} + ${xJitter})`;
+    let zp = d`${r} * sin(${theta} + ${zJitter})`;
+  
+    //let rgb = dynoVec3(new THREE.Vector3(0.8, 0.7, 0.5)); // dusty color
+    let scaleValue = d`0.01 + pow(0.15 * ${random}.w, 2.0)`;
+    let anisoScale = dynoVec3(new THREE.Vector3(1, 1, 1));
+    let scale = d`${anisoScale} * ${scaleValue}`; 
+   // let opacity = d`1.0 - ${random}.z`; // fade out at the top
+     let opacity = d`1.0`; // fade out at the top
+
+    let color1 = dynoVec3(new THREE.Vector3(1., 1., 0.2)); // yellow
+    let color2 = dynoVec3(new THREE.Vector3(1., 0.2, 0.2)); // red
+    let color3 = dynoVec3(new THREE.Vector3(0.2, 0.2, 1.)); // blue
+
+    let rgb = d`mix(${color1}, ${color2}, smoothstep(0.0, 0.5, ${random}.z))`;
+    rgb = d`mix(${rgb}, ${color3}, smoothstep(0.5, 1.0, ${random}.z))`;
+
+    let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
+  
+  
+    return {
+      position: position,
+      rgb: rgb,
+      opacity: opacity,
+      scales: scale
+    }
+}
+
+
+// --
+// Wormhole
+// --
+
+export let globalScale = dynoFloat(2);
+
+export function wormhole(index, dynoTime, dynoGlobals) {
+    const random = hashVec4(index);
+  
+    const tunnelLength = 40.0;
+    const tunnelSpeed = 5.0;
+  
+    let zp = d`((${dynoTime} * ${tunnelSpeed} * ${random}.z) % ${tunnelLength}) - ${tunnelLength / 2}`;
+    
+    const theta = d`2 * PI * ${random}.x`;
+  
+    // wiggle : curves in the tunnel that attenuates near ther user
+    let wiggleAmount = d`0.3 * smoothstep(-5.0, 0.0, ${zp})`; // 0 near user, 0.3 at tail
+    let wiggle = d`${wiggleAmount} * sin(2.0 * PI * ${zp} * 0.2 + ${dynoTime})`;
+    // twist : radial twisting 
+    let twist = d`${theta} + 1.5 * sin(${zp} * 0.5 + ${dynoTime})`;
+  
+    let radius = d`1.0 + 0.5 * sin(${zp} * 0.7 + ${dynoTime}) * smoothstep(-5.0, 0.0, ${zp})`;
+  
+    let xp = d`${radius} * cos(${twist}) + ${wiggle}`;
+    let yp = d`${radius} * sin(${twist}) + ${wiggle}`;
+  
+    let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
+  
+    // Animate hue with time for extra trippiness
+    let t = d`clamp((${zp} + 5.0) / 10.0, 0.0, 1.0)`;
+    let hue = d`(${t} + 0.2 * ${dynoTime}) % 1.0`;
+  
+    // Simple HSV to RGB approximation
+    let r = d`abs(${hue} * 6.0 - 3.0) - 1.0`;
+    let g = d`2.0 - abs(${hue} * 6.0 - 2.0)`;
+    let b = d`2.0 - abs(${hue} * 6.0 - 4.0)`;
+    let dynoColor = combine({
+      vectorType: "vec3",
+      x: d`clamp(${r}, 0.0, 1.0)`,
+      y: d`clamp(${g}, 0.0, 1.0)`,
+      z: d`clamp(${b}, 0.0, 1.0)`,
+    });
+  
+    const anisoScale = dynoConst("vec3", [.01, .01, .01]);
+    const scales = d`${anisoScale} * pow(${globalScale}, 2)`;
+    const dynoOpacity = d`1.0`;
+  
+    return {
+      position: position,
+      rgb: dynoColor,
+      opacity: dynoOpacity,
+      scales: scales
+    };
+  }

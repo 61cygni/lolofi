@@ -25,6 +25,7 @@ const {
   pow,
   atan,
   fract,
+  floor,
   split,
   smoothstep,
   clamp,
@@ -91,6 +92,9 @@ const functions = {
   },
   cos: (arg: DynoValue) => {
     return cos(arg);
+  },
+  floor: (arg: DynoValue) => {
+    return floor(arg);
   },
   fract: (arg: DynoValue) => {
     return fract(arg);
