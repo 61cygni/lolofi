@@ -11,7 +11,7 @@ const { mul, combine, dynoVec3, dynoConst, dynoFloat, hashVec4 } = dyno;
 // These are helper files to remove a bunch of the dyno / shader boilerplate
 import { d, runTests } from "./dynoexp.ts";
 import * as ShaderGen from "./shadergen.js";
-import { starriver, basic, wormhole, globalScale, galaxy } from "./effects.js";
+import * as effects from "./effects.js";
 
 import {
   SparkRenderer,
@@ -84,7 +84,7 @@ function renderfunc(index, dynoTime, dynoGlobals) {
   });
 
   const anisoScale = dynoConst("vec3", [.01, .01, .01]);
-  const scales = d`${anisoScale} * pow(${globalScale}, 2)`;
+  const scales = d`${anisoScale} * pow(${effects.globalScale}, 2)`;
   const dynoOpacity = d`1.0`;
 
   return {
@@ -115,7 +115,7 @@ function updateFrequency() {
 
   // frequencypicked by trial and error
   let scale = dataArray[7];
-  globalScale.value = (scale ) * 0.008;
+  effects.globalScale.value = (scale ) * 0.008;
 
   // If you want to iterate over all frequencies, you can do this:
   // for (let i = 0; i < bufferLength; i++) {
@@ -154,8 +154,20 @@ async function main() {
   localFrame.add(camera);
   scene.add(spark);
 
-  localFrame.position.set(-3.45, 0.90, 8.74);
-  localFrame.rotation.set(-.12, -.01, -.19);
+  const demo = document.body.dataset.demo;
+  if (demo) {
+    console.log(`Starting demo: ${demo}`);
+  }
+
+  if (demo === "wormhole") {
+    localFrame.position.set(.28, -.43, -8.4);
+    localFrame.rotation.set(-3.05, 0.02, 3.14);
+   } else {
+    localFrame.position.set(-3.45, 0.90, 8.74);
+    localFrame.rotation.set(-.12, -.01, -.19);
+  }
+
+  
 
 
   const fpsMovement = new FpsMovement({ moveSpeed: 0.5, xr : renderer.xr });
@@ -177,16 +189,18 @@ async function main() {
     document.body.appendChild(vrButton);
   }
 
+  
+
   const shadergen = ShaderGen.shaderBox({
     // infunc: starriver,
     // infunc: wormhole,
-    infunc: galaxy,
+    infunc: effects[demo], 
     //infunc: basic,
     numSplats: 500000,
     globals: {
       anisoScale: dynoVec3(new THREE.Vector3(0.01, 0.01, 0.01)),
       updateFrame(time) {
-        this.scale = mul(this.anisoScale, globalScale);
+        this.scale = mul(this.anisoScale, effects.globalScale);
       },
     },
   });
