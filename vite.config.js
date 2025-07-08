@@ -8,7 +8,8 @@ export default defineConfig({
         main: 'index.html',
         galaxy: 'galaxy.html',
         starriver: 'starriver.html',
-        wormhole: 'wormhole.html'
+        wormhole: 'wormhole.html',
+        surf: 'surf.html'
       }
     }
   }

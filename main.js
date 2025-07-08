@@ -9,7 +9,6 @@ import { dyno } from "@sparkjsdev/spark";
 const { mul, combine, dynoVec3, dynoConst, dynoFloat, hashVec4 } = dyno;
 
 // These are helper files to remove a bunch of the dyno / shader boilerplate
-import { d, runTests } from "./dynoexp.ts";
 import * as ShaderGen from "./shadergen.js";
 import * as effects from "./effects.js";
 
@@ -24,78 +23,6 @@ import {
 // const globalScale = dynoFloat(2);
 
 
-function b(index, dynoTime, dynoGlobals) {
-  const random = hashVec4(index);
-  let xp = d`${random}.x`;
-  let yp = d`${random}.y`;
-  let zp = d`${random}.z`;
-  let rgb = dynoVec3(new THREE.Vector3(1, 1, 1));
-  let scale = dynoVec3(new THREE.Vector3(.01, .01, .01));
-  let opacity = d`1.0`;
-  let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
-  return {
-      position: position,
-      rgb: rgb,
-      opacity: opacity,
-      scales: scale
-  }
-}
-
-
-// --
-// Wormhole
-// --
-function renderfunc(index, dynoTime, dynoGlobals) {
-  const random = hashVec4(index);
-
-  const tunnelLength = 40.0;
-  const tunnelSpeed = 5.0;
-
-  let zp = d`((${dynoTime} * ${tunnelSpeed} * ${random}.z) % ${tunnelLength}) - ${tunnelLength / 2}`;
-  
-  const theta = d`2 * PI * ${random}.x`;
-
-  // wiggle : curves in the tunnel that attenuates near ther user
-  let wiggleAmount = d`0.3 * smoothstep(-5.0, 0.0, ${zp})`; // 0 near user, 0.3 at tail
-  let wiggle = d`${wiggleAmount} * sin(2.0 * PI * ${zp} * 0.2 + ${dynoTime})`;
-  // twist : radial twisting 
-  let twist = d`${theta} + 1.5 * sin(${zp} * 0.5 + ${dynoTime})`;
-
-  let radius = d`1.0 + 0.5 * sin(${zp} * 0.7 + ${dynoTime}) * smoothstep(-5.0, 0.0, ${zp})`;
-
-  let xp = d`${radius} * cos(${twist}) + ${wiggle}`;
-  let yp = d`${radius} * sin(${twist}) + ${wiggle}`;
-
-  let position = combine({ vectorType: "vec3", x: xp, y: yp, z: zp });
-
-  // Animate hue with time for extra trippiness
-  let t = d`clamp((${zp} + 5.0) / 10.0, 0.0, 1.0)`;
-  let hue = d`(${t} + 0.2 * ${dynoTime}) % 1.0`;
-
-  // Simple HSV to RGB approximation
-  let r = d`abs(${hue} * 6.0 - 3.0) - 1.0`;
-  let g = d`2.0 - abs(${hue} * 6.0 - 2.0)`;
-  let b = d`2.0 - abs(${hue} * 6.0 - 4.0)`;
-  let dynoColor = combine({
-    vectorType: "vec3",
-    x: d`clamp(${r}, 0.0, 1.0)`,
-    y: d`clamp(${g}, 0.0, 1.0)`,
-    z: d`clamp(${b}, 0.0, 1.0)`,
-  });
-
-  const anisoScale = dynoConst("vec3", [.01, .01, .01]);
-  const scales = d`${anisoScale} * pow(${effects.globalScale}, 2)`;
-  const dynoOpacity = d`1.0`;
-
-  return {
-    position: position,
-    rgb: dynoColor,
-    opacity: dynoOpacity,
-    scales: scales
-  };
-}
-
-
 const audio = document.getElementById('audio');
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioCtx.createAnalyser();
@@ -108,6 +35,8 @@ analyser.connect(audioCtx.destination);
 
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Uint8Array(bufferLength);
+
+const demo = document.body.dataset.demo;
 
 function updateFrequency() {
 
@@ -155,7 +84,6 @@ async function main() {
   localFrame.add(spark);
   // scene.add(spark);
 
-  const demo = document.body.dataset.demo;
   if (demo) {
     console.log(`Starting demo: ${demo}`);
   }
@@ -168,8 +96,49 @@ async function main() {
     localFrame.rotation.set(-.12, -.01, -.19);
   }
 
-  
+  function updateCameraPath(time, localFrame) {
+    if (demo === "surf") {
+      time = time * 0.001; // Use seconds
 
+
+      time = time * .1;
+
+      // Arc parameters
+      const radius = 6.0;      // How big the arc is
+      const speed = 0.15;      // How fast to move along the arc
+      const baseY = 0.8;       // Camera height
+      const yAmplitude = 0.3;  // Up/down oscillation
+
+      // Oscillation parameters for weaving
+      const weaveAmplitude = 1.5;   // How far to weave left/right
+      const weaveFrequency = 0.5;   // How fast to weave
+
+      // Angle for current and look-ahead positions
+      const angle = time * speed * Math.PI * 2;
+      const lookAheadAngle = angle + 0.1; // Look slightly ahead
+
+      // Weaving offset
+      const weave = Math.sin(time * weaveFrequency) * weaveAmplitude;
+      const lookAheadWeave = Math.sin((time + 0.1) * weaveFrequency) * weaveAmplitude;
+
+      // Camera position on arc, with weaving
+      const x = Math.sin(angle) * radius + weave;
+      const z = Math.cos(angle) * radius + weave;
+      const y = baseY + Math.sin(angle * 1.5) * yAmplitude;
+
+      // Look-ahead position on arc, with weaving
+      const lookAheadX = Math.sin(lookAheadAngle) * radius + lookAheadWeave;
+      const lookAheadZ = Math.cos(lookAheadAngle) * radius + lookAheadWeave;
+      const lookAheadY = baseY + Math.sin(lookAheadAngle * 1.5) * yAmplitude;
+
+      // Set camera position
+      localFrame.position.set(x, y, z);
+
+      // Look ahead along the arc
+      localFrame.lookAt(lookAheadX, lookAheadY, lookAheadZ);
+      localFrame.rotateY(Math.PI);
+    }
+  }
 
   const fpsMovement = new FpsMovement({ moveSpeed: 0.5, xr : renderer.xr });
   const pointerControls = new PointerControls({ canvas });
@@ -191,11 +160,15 @@ async function main() {
   }
 
   
+  let shaderfunc = demo;
+  if (demo === "surf") {
+    shaderfunc = "galaxy"; 
+  }
 
   const shadergen = ShaderGen.shaderBox({
     // infunc: starriver,
     // infunc: wormhole,
-    infunc: effects[demo], 
+    infunc: effects[shaderfunc], 
     //infunc: basic,
     numSplats: 500000,
     globals: {
@@ -243,6 +216,7 @@ loader.load('./skybox.png', function(texture) {
     fpsMovement.update(deltaTime, localFrame);
 
     updateFrequency();
+    updateCameraPath(time, localFrame);
 
     // Update camera info overlay
     const pos = localFrame.position;
