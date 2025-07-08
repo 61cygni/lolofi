@@ -152,7 +152,8 @@ async function main() {
 
   localFrame.add(spark);
   localFrame.add(camera);
-  scene.add(spark);
+  localFrame.add(spark);
+  // scene.add(spark);
 
   const demo = document.body.dataset.demo;
   if (demo) {
