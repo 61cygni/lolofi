@@ -1,6 +1,7 @@
-# Lo Lo Fi Wormhole 
+# LoloFI WebXR Shader Demos 
 
-Music and visuals in VR
+Written using Sparkjs.
+
 
 ## Quick Start
 
